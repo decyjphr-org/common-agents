@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HTML-in-Canvas — Basic 2D</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  /* Direct child of the canvas (Rule 1). Interactive, accessible, real CSS. */
+  #card {
+    width: 320px; padding: 20px; border-radius: 12px;
+    background: #1e293b; color: #e2e8f0; box-shadow: 0 10px 30px #0008;
+  }
+  #card button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: #38bdf8; cursor: pointer; }
+  #notice { position: fixed; inset: auto 16px 16px 16px; padding: 12px; background: #7c2d12; border-radius: 8px; display: none; }
+</style>
+</head>
+<body>
+  <canvas id="c" layoutsubtree>
+    <div id="card">
+      <h2>Live HTML in canvas</h2>
+      <p lang="ar" dir="rtl">مرحبا — RTL text rendered by the browser.</p>
+      <label>Name <input id="name" placeholder="Type here" /></label>
+      <p><button id="btn">Clicked 0 times</button></p>
+    </div>
+  </canvas>
+  <div id="notice" role="status">
+    HTML-in-Canvas isn't available. Enable <code>chrome://flags/#canvas-draw-element</code> in a recent Chromium browser. Showing fallback.
+  </div>
+
+<script type="module">
+  const canvas = document.getElementById('c');
+  const card = document.getElementById('card');
+  const btn = document.getElementById('btn');
+
+  // Rule 5 — feature detect and fall back.
+  const supported =
+    'layoutSubtree' in HTMLCanvasElement.prototype &&
+    'drawElementImage' in CanvasRenderingContext2D.prototype;
+
+  if (!supported) {
+    document.getElementById('notice').style.display = 'block';
+    canvas.removeAttribute('layoutsubtree');
+    canvas.after(card);                      // DOM-overlay style fallback
+    card.style.cssText += ';position:fixed;top:40px;left:40px';
+  } else {
+    const ctx = canvas.getContext('2d');
+    let count = 0;
+    btn.addEventListener('click', () => { btn.textContent = `Clicked ${++count} times`; });
+
+    // Rule 4 — size the grid to device pixels.
+    new ResizeObserver(([e]) => {
+      canvas.width = e.devicePixelContentBoxSize[0].inlineSize;
+      canvas.height = e.devicePixelContentBoxSize[0].blockSize;
+      canvas.requestPaint?.();
+    }).observe(canvas, { box: 'device-pixel-content-box' });
+
+    // Rule 2 — draw inside paint.
+    canvas.onpaint = () => {
+      ctx.reset();
+      ctx.scale(devicePixelRatio, devicePixelRatio); // draw in CSS pixels
+
+      // Ordinary canvas drawing composites with the HTML.
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#38bdf8';
+      for (let i = 0; i < 20; i++) {
+        ctx.beginPath(); ctx.arc(200, 200, 20 + i * 18, 0, Math.PI * 2); ctx.stroke();
+      }
+
+      // Rotate the card with the canvas CTM — the returned matrix includes it.
+      ctx.translate(120, 140);
+      ctx.rotate(-0.06);
+      const t = ctx.drawElementImage(card, 0, 0);
+
+      // Rule 3 — sync DOM position so clicks, focus, and a11y line up.
+      card.style.transform = t.toString();
+    };
+  }
+</script>
+</body>
+</html>

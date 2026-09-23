@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HTML-in-Canvas — Animated game-style HUD</title>
+<style>
+  body { margin: 0; background: #020617; color: #e2e8f0; font-family: system-ui, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  .panel { padding: 12px 16px; border-radius: 10px; background: #0f172acc; border: 1px solid #334155; }
+  #hud { width: 220px; }
+  #menu { width: 240px; }
+  #menu button { display: block; width: 100%; margin: 6px 0; padding: 8px; font: inherit; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: inherit; }
+  #menu button:focus-visible { outline: 3px solid #facc15; }
+</style>
+</head>
+<body>
+  <canvas id="c" layoutsubtree>
+    <!-- Each drawn element is a direct child (Rule 1). -->
+    <div id="hud" class="panel" aria-live="polite">Score: <span id="score">0</span></div>
+    <nav id="menu" class="panel" aria-label="Game menu">
+      <button id="resume">Resume</button>
+      <button id="settings">Settings</button>
+      <button id="quit">Quit</button>
+    </nav>
+  </canvas>
+
+<script type="module">
+  const canvas = document.getElementById('c');
+  const hud = document.getElementById('hud');
+  const menu = document.getElementById('menu');
+  const scoreEl = document.getElementById('score');
+
+  const ok = 'drawElementImage' in (window.CanvasRenderingContext2D?.prototype ?? {}) &&
+             'requestPaint' in HTMLCanvasElement.prototype;
+  if (!ok) {
+    document.body.insertAdjacentHTML('afterbegin',
+      '<p style="padding:12px;background:#7c2d12;margin:0">Requires HTML-in-Canvas with requestPaint(). Enable chrome://flags/#canvas-draw-element.</p>');
+    throw new Error('HTML-in-Canvas unsupported');
+  }
+
+  const ctx = canvas.getContext('2d');
+  let score = 0, t0 = performance.now();
+  const player = { x: 200, y: 200, vx: 180, vy: 140 };
+
+  new ResizeObserver(([e]) => {
+    canvas.width = e.devicePixelContentBoxSize[0].inlineSize;
+    canvas.height = e.devicePixelContentBoxSize[0].blockSize;
+  }).observe(canvas, { box: 'device-pixel-content-box' });
+
+  // Update DOM state OUTSIDE paint — DOM changes made in paint land next frame.
+  setInterval(() => { scoreEl.textContent = ++score; }, 500);
+
+  canvas.onpaint = () => {
+    const now = performance.now();
+    const dt = (now - t0) / 1000; t0 = now;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+
+    // Game update
+    player.x += player.vx * dt; player.y += player.vy * dt;
+    if (player.x < 20 || player.x > w - 20) player.vx *= -1;
+    if (player.y < 20 || player.y > h - 20) player.vy *= -1;
+
+    // Render scene
+    ctx.reset();
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.arc(player.x, player.y, 20, 0, Math.PI * 2); ctx.fill();
+
+    // Render HTML UI on top and sync transforms (Rule 3)
+    hud.style.transform = ctx.drawElementImage(hud, 16, 16).toString();
+
+    ctx.save();
+    const bob = Math.sin(now / 600) * 4;
+    ctx.translate(w - 272, 16 + bob);
+    menu.style.transform = ctx.drawElementImage(menu, 0, 0).toString();
+    ctx.restore();
+
+    // Rule 2 — keep animating via requestPaint, not a separate rAF draw loop.
+    canvas.requestPaint();
+  };
+
+  canvas.requestPaint();
+</script>
+</body>
+</html>

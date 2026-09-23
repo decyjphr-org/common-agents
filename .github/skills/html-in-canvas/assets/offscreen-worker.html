@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HTML-in-Canvas — OffscreenCanvas worker</title>
+<style>
+  body { margin: 0; background: #111827; font-family: system-ui, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #label { width: 280px; padding: 16px; border-radius: 10px; background: #fef3c7; color: #78350f; }
+</style>
+</head>
+<body>
+  <canvas id="c" layoutsubtree>
+    <div id="label">Drawn in a <strong>worker</strong> via captureElementImage()</div>
+  </canvas>
+
+<!-- Inline worker for a single-file demo; use a separate worker.js in real projects. -->
+<script id="worker-src" type="text/js-worker">
+  let ctx, angle = 0;
+  self.onmessage = ({ data }) => {
+    if (data.canvas) { ctx = data.canvas.getContext('2d'); return; }
+    if (data.resize) { ctx.canvas.width = data.resize[0]; ctx.canvas.height = data.resize[1]; return; }
+    if (data.elementImage) {
+      const img = data.elementImage;
+      const { width, height } = ctx.canvas;
+      ctx.reset();
+      ctx.fillStyle = '#111827'; ctx.fillRect(0, 0, width, height);
+      ctx.translate(width / 2, height / 2);
+      ctx.rotate(Math.sin((angle += 0.02)) * 0.2);
+      ctx.translate(-img.width / 2, -img.height / 2);
+      const transform = ctx.drawElementImage(img, 0, 0);
+      img.close(); // release snapshot resources
+      self.postMessage({ transform });
+    }
+  };
+</script>
+
+<script type="module">
+  const canvas = document.getElementById('c');
+  const label = document.getElementById('label');
+
+  const ok = 'captureElementImage' in HTMLCanvasElement.prototype &&
+             'transferControlToOffscreen' in HTMLCanvasElement.prototype &&
+             'requestPaint' in HTMLCanvasElement.prototype;
+  if (!ok) {
+    canvas.removeAttribute('layoutsubtree');
+    canvas.after(label);
+    throw new Error('Worker path unsupported — showing plain HTML');
+  }
+
+  const src = document.getElementById('worker-src').textContent;
+  const worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+
+  const offscreen = canvas.transferControlToOffscreen();
+  worker.postMessage({ canvas: offscreen }, [offscreen]);
+
+  new ResizeObserver(([e]) => {
+    worker.postMessage({ resize: [
+      e.devicePixelContentBoxSize[0].inlineSize,
+      e.devicePixelContentBoxSize[0].blockSize,
+    ] });
+  }).observe(canvas, { box: 'device-pixel-content-box' });
+
+  // Main thread: snapshot in paint, transfer to the worker.
+  canvas.onpaint = () => {
+    const elementImage = canvas.captureElementImage(label);
+    worker.postMessage({ elementImage }, [elementImage]);
+    canvas.requestPaint();
+  };
+
+  // Worker returns the sync transform; apply it on the main thread (Rule 3).
+  worker.onmessage = ({ data }) => {
+    if (data.transform) label.style.transform = data.transform.toString();
+  };
+
+  canvas.requestPaint();
+</script>
+</body>
+</html>

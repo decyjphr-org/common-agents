@@ -5,7 +5,7 @@ description: Create meeting agenda for 1-1 meeting for a period based on activit
 
 <!-- Tip: Use /create-prompt in chat to generate content with agent assistance -->
 
-Create a meeting agenda for a 1-1 based on activity from {{period}}. Look in Daily notes
+Create a meeting agenda for a 1-1 based on activity from ${input:period:date range, for example March 23 – April 1}. Look in Daily notes.
 
 Example agenda:
 

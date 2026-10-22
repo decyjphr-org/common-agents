@@ -1,0 +1,13 @@
+{
+  "name": "YOUR-HANDLE-common-agents",
+  "owner": { "name": "YOUR NAME" },
+  "metadata": { "description": "Team skills and agents", "version": "1.0.0" },
+  "plugins": [
+    {
+      "name": "YOUR-HANDLE-workshop-kit",
+      "description": "Release validation, code review, issue triage, and README and code-explainer agents",
+      "version": "1.0.0",
+      "source": "plugins/workshop-kit"
+    }
+  ]
+}

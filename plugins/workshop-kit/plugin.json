@@ -1,0 +1,8 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "YOUR-HANDLE-workshop-kit",
+  "description": "Release validation, code review, issue triage, and README and code-explainer agents",
+  "version": "1.0.0",
+  "author": { "name": "YOUR NAME" },
+  "license": "MIT"
+}

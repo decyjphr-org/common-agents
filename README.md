@@ -1,6 +1,6 @@
 # Common Agents
 
-Reusable AI skills, a read-only code-explanation agent, and prompt templates for software engineering workflows. This is a collection of instructions and supporting resources, not a standalone application.
+Reusable AI skills, a coordinated agent workflow, and prompt templates for software engineering workflows. This is a collection of instructions and supporting resources, not a standalone application.
 
 ## Get started
 
@@ -75,17 +75,68 @@ Replace `owner/repo` with the target repository. The script prints ranked JSON, 
 
 A custom agent defines a persistent role and tool boundary for a conversation; a skill supplies a workflow for a particular task.
 
-The repository includes one agent: [code-explainer](.github/agents/code-explainer.agent.md). It explains repository structure, architecture, domain concepts, build/test/deployment steps, and potential hotspots, grounded in the code. It uses read and search tools only and must not edit code.
-
-In VS Code, choose **code-explainer** from the chat agent picker. In Copilot CLI versions supporting custom agents, use `/agent` and select it. Then ask, for example:
+Choose **coordinator** in the VS Code chat agent picker, or use `/agent` in a compatible Copilot CLI and select it. Give it a concrete task, target paths, constraints, and acceptance criteria:
 
 ```text
-Explain this repository's architecture and key dependencies.
-Explain how the scene, parts, and layout modules fit together.
-Trace the authentication flow and include a Mermaid diagram.
+Plan a fix for duplicate checkout submissions in src/checkout.
+Preserve the public API and add a focused regression test.
+Do not implement until I approve the consolidated plan.
 ```
 
-Run these requests in the relevant application workspace. The agent can explain only the code and context it can access.
+### Coordinated workflow
+
+```text
+Coordinator
+ +-- Researcher (code-explainer) --+
+ +-- Security -------------------+--> Consolidated plan
+ +-- Architect ------------------+          |
+                                      Human approval
+                                           |
+                                      Implementer
+                                           |
+                                   Read-only Reviewer
+```
+
+The coordinator fans out only independent analysis questions. When architecture or security depends on research or a proposed design, that analysis waits for its prerequisite. Implementation and review are sequential, not parallel.
+
+| Agent | Receives | Must return | Tools |
+| --- | --- | --- | --- |
+| [coordinator](.github/agents/coordinator.agent.md) | User goal, target scope, constraints, and acceptance criteria. | Versioned consolidated plan; approval request; final changes, validation evidence, review verdict, and blockers. | Read, search, delegate only to the five listed workers. |
+| [code-explainer (Researcher)](.github/agents/code-explainer.agent.md) | Bounded research question and scoped context. | Source-grounded behavior, affected areas, validation guidance, and unknowns. | Read and search only. |
+| [security](.github/agents/security.agent.md) | Bounded security question and available prerequisite findings. | Evidence-backed threats, mitigations, acceptance checks, and residual risks. | Read and search only. |
+| [architect](.github/agents/architect.agent.md) | Design question, constraints, and completed prerequisites where needed. | Minimal design, alternatives, ordered steps, validation/rollback guidance, and open decisions. | Read and search only. |
+| [implementer](.github/agents/implementer.agent.md) | Exact approved plan/version, human approval, allowed paths, and acceptance criteria. | Change inventory, acceptance evidence, actual validation results, and review handoff. | Read, search, edit, and execute. |
+| [reviewer](.github/agents/reviewer.agent.md) | Approved plan, implementation changes, before/after evidence, and validation results. | `accepted`, `changes-required`, or `blocked`, with actionable findings and verification limits. | Read and search only. |
+
+Each worker file defines its full input/output contract and boundaries. Workers have `user-invocable: false` and are hidden from the picker; the coordinator delegates to them by name. The existing code-explainer is reused as the Researcher rather than duplicated. Implementer and Reviewer set `include-custom-instructions: true` so repository custom instructions are included when they run as subagents.
+
+The coordinator must present a plan such as `P1`, ask for explicit approval of that version, and stop. Reply with an approval such as `Approve P1` or request revisions. A material plan change requires a new approval. Only the Implementer can edit or execute commands; review findings return to it for in-scope fixes and another read-only review.
+
+Use a client supporting the `agents`, `user-invocable`, and `include-custom-instructions` fields and subagent delegation. These files define an instruction-level approval gate, not an external access-control mechanism: keep client tool permissions enabled and do not assume that hiding a worker removes its capabilities.
+
+### VS Code and Copilot CLI
+
+Both clients are intended targets for the same six workflow files; no client-specific copies are maintained. Runtime compatibility has not yet been verified, and no minimum supported version has been established.
+
+| Client | Setup and launch | Verify before use |
+| --- | --- | --- |
+| VS Code with GitHub Copilot | Open the target project containing `.github/agents/`, then select **coordinator** in Chat. | Custom-agent discovery, named subagent delegation, worker visibility, allowed tools, and repository-instruction inclusion. |
+| GitHub Copilot CLI | Start `copilot` from the target project, run `/agent`, and select **coordinator**. | The same capabilities, including how this CLI version handles each frontmatter field. |
+
+Do not assume a client enforces a field simply because it loads the file. If any required capability is unsupported, stop using the workflow in that client until it is supported or explicitly adapted; do not broaden worker tools as a workaround.
+
+For each client, run this smoke test in a disposable project with no unrelated changes:
+
+1. Confirm the coordinator is selectable and the five workers are hidden. Unrelated standalone agents may still appear.
+2. Request a small documentation change with an explicit acceptance criterion. Inspect delegation activity: independent questions may overlap, dependent questions must wait, and analysis workers must have only read/search tools.
+3. Confirm a versioned consolidated plan is presented and no files change before a subsequent explicit approval. Request a revision and confirm the revised plan requires its own approval.
+4. Approve the current version. Confirm implementation occurs only afterward and review starts only when implementation stops.
+5. Use a harmless, distinctive repository instruction in the disposable project and verify both Implementer and Reviewer receive it. Check tool availability as well as worker-reported compliance.
+6. Confirm the Reviewer cannot edit or execute and returns a verdict grounded in the actual changes. Record each client's version and observed results before treating it as verified.
+
+The independent [readme-specialist](.github/agents/readme-specialist.agent.md) agent remains available for README/supporting documentation work with read, search, and edit tools; it is not part of the coordinator's delegation list.
+
+Run the workflow in the relevant application workspace, with all six workflow agent files installed together. Agents can inspect only the code and context they can access.
 
 ## Prompt templates
 
